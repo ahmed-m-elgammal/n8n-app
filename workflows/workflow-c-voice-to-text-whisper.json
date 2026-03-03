@@ -1,0 +1,154 @@
+{
+  "name": "Workflow C - Voice to Text (Hugging Face Whisper)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-to-text",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "binaryPropertyName": "data"
+        }
+      },
+      "id": "VoiceWebhook",
+      "name": "Voice To Text Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -760,
+        300
+      ],
+      "webhookId": "voice-to-text"
+    },
+    {
+      "parameters": {
+        "jsCode": "if (!$binary?.data) {\n  throw new Error('Upload audio using multipart/form-data with file field name \"data\".');\n}\n\nreturn [{\n  json: $json,\n  binary: $binary\n}];"
+      },
+      "id": "ValidateAudioInput",
+      "name": "Validate Audio Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.HUGGINGFACE_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "WhisperTranscribe",
+      "name": "Call Whisper API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\n\nif (body.error) {\n  throw new Error('Hugging Face Whisper error: ' + body.error);\n}\n\nconst transcription = typeof body.text === 'string'\n  ? body.text\n  : (Array.isArray(body) && typeof body[0]?.text === 'string' ? body[0].text : '');\n\nif (!transcription.trim()) {\n  throw new Error('No transcription returned by Whisper API');\n}\n\nreturn [{ json: { ok: true, transcription: transcription.trim() } }];"
+      },
+      "id": "ParseWhisperOutput",
+      "name": "Parse Whisper Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "VoiceWebhookResponse",
+      "name": "Voice To Text Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Voice To Text Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Audio Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Audio Input": {
+      "main": [
+        [
+          {
+            "node": "Call Whisper API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Whisper API": {
+      "main": [
+        [
+          {
+            "node": "Parse Whisper Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Whisper Output": {
+      "main": [
+        [
+          {
+            "node": "Voice To Text Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "677007a7-95b4-4352-9aaf-53d2c5ec0c9e",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "workflow-c-voice-to-text",
+  "tags": []
+}

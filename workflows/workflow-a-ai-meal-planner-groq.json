@@ -1,0 +1,172 @@
+{
+  "name": "Workflow A - AI Meal Planner (Groq)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meal-planner",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "MealPlannerWebhook",
+      "name": "Meal Planner Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -860,
+        220
+      ],
+      "webhookId": "meal-planner"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body ?? $json;\nconst diet = String(payload.diet ?? 'balanced').trim() || 'balanced';\nconst calories = Number(payload.calories ?? 2000);\nconst allergiesRaw = payload.allergies ?? [];\nconst allergies = Array.isArray(allergiesRaw)\n  ? allergiesRaw.map((a) => String(a).trim()).filter(Boolean)\n  : String(allergiesRaw).split(',').map((a) => a.trim()).filter(Boolean);\n\nif (!Number.isFinite(calories) || calories < 900 || calories > 6000) {\n  throw new Error('calories must be between 900 and 6000');\n}\n\nconst promptLines = [\n  'Generate a 1-day meal plan in JSON only.',\n  'User profile:',\n  '- diet: ' + diet,\n  '- target_calories: ' + calories,\n  '- allergies: ' + (allergies.length ? allergies.join(', ') : 'none'),\n  '',\n  'Return strict JSON with this exact shape:',\n  '{',\n  '  \"diet\": \"string\",',\n  '  \"target_calories\": number,',\n  '  \"allergies\": [\"string\"],',\n  '  \"meals\": [',\n  '    {\"name\":\"Breakfast\",\"items\":[{\"food\":\"string\",\"portion\":\"string\",\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number}]},',\n  '    {\"name\":\"Lunch\",\"items\":[{\"food\":\"string\",\"portion\":\"string\",\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number}]},',\n  '    {\"name\":\"Dinner\",\"items\":[{\"food\":\"string\",\"portion\":\"string\",\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number}]},',\n  '    {\"name\":\"Snack\",\"items\":[{\"food\":\"string\",\"portion\":\"string\",\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number}]}',\n  '  ],',\n  '  \"daily_totals\":{\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number},',\n  '  \"notes\":[\"string\"]',\n  '}',\n  'No markdown fences.'\n];\n\nreturn [{ json: { diet, calories, allergies, prompt: promptLines.join('\\n') } }];"
+      },
+      "id": "PrepareMealPlannerInput",
+      "name": "Prepare Meal Planner Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are NutriHealth meal planner assistant. Always obey allergies and calorie target. Return strict JSON only."
+        }
+      },
+      "id": "MealPlannerAgent",
+      "name": "AI Meal Planner Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -420,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "llama-3.3-70b-versatile"
+        },
+        "options": {
+          "baseURL": "https://api.groq.com/openai/v1",
+          "temperature": 0.3
+        }
+      },
+      "id": "GroqChatModel",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -420,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output ?? $json.text ?? '';\nif (typeof raw !== 'string' || !raw.trim()) {\n  throw new Error('AI response is empty');\n}\n\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (error) {\n  const start = cleaned.indexOf('{');\n  const end = cleaned.lastIndexOf('}');\n  if (start === -1 || end === -1 || end <= start) {\n    throw new Error('Unable to parse meal plan JSON from AI output');\n  }\n  parsed = JSON.parse(cleaned.slice(start, end + 1));\n}\n\nreturn [{ json: { ok: true, meal_plan: parsed } }];"
+      },
+      "id": "ParseMealPlan",
+      "name": "Parse Meal Plan JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "MealPlannerResponse",
+      "name": "Meal Planner Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        20,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Meal Planner Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Meal Planner Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Meal Planner Input": {
+      "main": [
+        [
+          {
+            "node": "AI Meal Planner Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Meal Planner Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Meal Plan JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Meal Planner Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Meal Plan JSON": {
+      "main": [
+        [
+          {
+            "node": "Meal Planner Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0d358a2b-5b5b-4c36-9cc2-f5df3d4f5138",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "workflow-a-meal-planner",
+  "tags": []
+}

@@ -1,0 +1,155 @@
+{
+  "name": "Workflow B - Fitness Advice (Hugging Face)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fitness-advice",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "FitnessWebhook",
+      "name": "Fitness Advice Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -760,
+        260
+      ],
+      "webhookId": "fitness-advice"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body ?? $json;\nconst query = String(payload.query ?? payload.text ?? '').trim();\nif (!query) {\n  throw new Error('query is required');\n}\n\nconst prompt = [\n  'You are a certified fitness coach.',\n  'Give concise and practical advice.',\n  'If the question is risky or medical, recommend seeing a professional.',\n  '',\n  'User question: ' + query\n].join('\\n');\n\nreturn [{ json: { query, prompt } }];"
+      },
+      "id": "PrepareFitnessPrompt",
+      "name": "Prepare Fitness Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.HUGGINGFACE_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ inputs: $json.prompt, parameters: { max_new_tokens: 280, temperature: 0.4, return_full_text: false } }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "CallHuggingFace",
+      "name": "Call Hugging Face Model",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\n\nif (body.error) {\n  throw new Error('Hugging Face error: ' + body.error);\n}\n\nlet advice = '';\nif (Array.isArray(body) && body[0]?.generated_text) {\n  advice = String(body[0].generated_text);\n} else if (typeof body.generated_text === 'string') {\n  advice = body.generated_text;\n} else if (typeof body.text === 'string') {\n  advice = body.text;\n} else {\n  advice = JSON.stringify(body);\n}\n\nreturn [{ json: { ok: true, advice: advice.trim() } }];"
+      },
+      "id": "ParseFitnessAnswer",
+      "name": "Parse Fitness Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "FitnessWebhookResponse",
+      "name": "Fitness Advice Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        120,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Fitness Advice Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fitness Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fitness Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call Hugging Face Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Hugging Face Model": {
+      "main": [
+        [
+          {
+            "node": "Parse Fitness Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Fitness Answer": {
+      "main": [
+        [
+          {
+            "node": "Fitness Advice Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aa0f40ea-3e68-425f-8f8d-d56e44f2dce7",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "workflow-b-fitness-advice",
+  "tags": []
+}
