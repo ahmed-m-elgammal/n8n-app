@@ -1,0 +1,41 @@
+app = "nutrihealth-n8n"
+primary_region = "ams"
+
+[build]
+  image = "docker.n8n.io/n8nio/n8n:latest"
+
+[env]
+  N8N_PORT = "5678"
+  N8N_PROTOCOL = "https"
+  N8N_PROXY_HOPS = "1"
+  N8N_SECURE_COOKIE = "true"
+  N8N_DIAGNOSTICS_ENABLED = "false"
+  N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
+  N8N_TEMPLATES_ENABLED = "false"
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS = "true"
+  TZ = "UTC"
+  GENERIC_TIMEZONE = "UTC"
+
+[http_service]
+  internal_port = 5678
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/"
+
+[mounts]
+  source = "n8n_data"
+  destination = "/home/node/.n8n"
+  initial_size = "10gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"
