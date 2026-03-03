@@ -1,23 +1,42 @@
-# fly.toml app configuration file generated for n8n-app on 2026-03-03T17:03:10Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'n8n-app'
-primary_region = 'ams'
+app = "n8n-app"
+primary_region = "ams"
 
 [build]
+  image = "docker.n8n.io/n8nio/n8n:latest"
+
+[env]
+  N8N_PORT = "5678"
+  N8N_LISTEN_ADDRESS = "0.0.0.0"
+  N8N_PROTOCOL = "https"
+  N8N_PROXY_HOPS = "1"
+  N8N_SECURE_COOKIE = "true"
+  N8N_DIAGNOSTICS_ENABLED = "false"
+  N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
+  N8N_TEMPLATES_ENABLED = "false"
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS = "true"
+  TZ = "UTC"
+  GENERIC_TIMEZONE = "UTC"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 5678
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/healthz"
+
+[mounts]
+  source = "n8n_data"
+  destination = "/home/node/.n8n"
+  initial_size = "10gb"
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
-  memory_mb = 1024
+  size = "shared-cpu-1x"
+  memory = "1024mb"
